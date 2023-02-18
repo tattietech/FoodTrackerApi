@@ -5,9 +5,9 @@ namespace foodTrackerApi.Models
 {
     public class User
     {
-        [JsonProperty("custom:household")]
-        [JsonPropertyName("custom:household")]
-        public int Household { get; set; }
+        [JsonProperty("custom:householdId")]
+        [JsonPropertyName("custom:householdId")]
+        public string HouseholdId { get; set; }
 
         [JsonPropertyName("given_name")]
         [JsonProperty("given_name")]
@@ -20,5 +20,11 @@ namespace foodTrackerApi.Models
         [JsonPropertyName("email")]
         [JsonProperty("email")]
         public string Email { get; set; }
+
+        [JsonPropertyName("username")]
+        [JsonProperty("username")]
+        public string Username { get; set; }
+
+        public bool IsHouseholdAdmin { get; set; }
     }
 }

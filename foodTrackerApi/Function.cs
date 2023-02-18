@@ -1,17 +1,13 @@
-using Amazon.DynamoDBv2.Model;
+using Amazon.CognitoIdentityProvider;
+using Amazon.CognitoIdentityProvider.Model;
 using Amazon.Lambda.APIGatewayEvents;
 using Amazon.Lambda.Core;
-using Amazon.Runtime.Internal.Transform;
+using Amazon.Runtime;
 using foodTrackerApi.Interfaces;
 using foodTrackerApi.Models;
 using foodTrackerApi.Services;
-using foodTrackerAuth.Models;
-using Microsoft.Extensions.DependencyInjection;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using System.Linq.Expressions;
 using System.Net;
-using System.Net.Http.Json;
 
 // Assembly attribute to enable the Lambda function's JSON input to be converted into a .NET class.
 [assembly: LambdaSerializer(typeof(Amazon.Lambda.Serialization.SystemTextJson.DefaultLambdaJsonSerializer))]
@@ -44,6 +40,7 @@ public class Function
         {
             "food" => new DynamoService<FoodItem>(FoodItem.Identifier),
             "storage" => new DynamoService<FoodStorage>(FoodStorage.Identifier),
+            "household" => new DynamoService<Household>(Household.Identifier),
             _ => null,
         };
 
@@ -64,23 +61,44 @@ public class Function
             case "GET":
                 user = await GetUserInfo(key);
 
-                if (user.Household == 0)
+                if (string.IsNullOrEmpty(user.HouseholdId))
                     break;
 
-                serviceResponse = await _dynamoService.List(user.Household);
+                if(path == "food")
+                {
+                    bool gotStorage = request.QueryStringParameters.TryGetValue("storageId", out var storageId);
+                    if (!gotStorage)
+                        break;
+
+                    serviceResponse = await _dynamoService.List(user.HouseholdId, storageId);
+                    break;
+                }
+
+                serviceResponse = await _dynamoService.List(user.HouseholdId);
                 break;
             case "PUT":
-                serviceResponse = await _dynamoService.Put(request.Body);
+                user = await GetUserInfo(key);
+
+                if (string.IsNullOrEmpty(user.HouseholdId))
+                    break;
+
+                serviceResponse = await _dynamoService.Put(user.HouseholdId, request.Body);
                 break;
             case "DELETE":
                 if(request.QueryStringParameters != null && request.QueryStringParameters.TryGetValue("id", out var id))
                 {
                     user = await GetUserInfo(key);
 
-                    if (user.Household == 0)
+                    if (string.IsNullOrEmpty(user.HouseholdId))
                         break;
 
-                    serviceResponse = await _dynamoService.Delete(user.Household, id);
+                    if(path == "storage")
+                    {
+                        serviceResponse = await _dynamoService.DeleteStorage(user.HouseholdId, id);
+                        break;
+                    }
+
+                    serviceResponse = await _dynamoService.Delete(user.HouseholdId, id);
                 }
                 break;
         }
@@ -101,7 +119,60 @@ public class Function
 
         var response = await _client.SendAsync(userInfoRequest);
         response.EnsureSuccessStatusCode();
-        return JsonConvert.DeserializeObject<User>(await response.Content.ReadAsStringAsync());
+        var user = JsonConvert.DeserializeObject<User>(await response.Content.ReadAsStringAsync());
+
+        if (string.IsNullOrEmpty(user.HouseholdId))
+        {
+            var household = await AddHousehold(user);
+            user.HouseholdId = household;
+        }
+
+        return user;
+    }
+
+    private async Task<string> AddHousehold(User user)
+    {
+        var id = $"household-{Guid.NewGuid()}";
+
+        user.IsHouseholdAdmin= true;
+        var household = new Household
+        {
+            Id = id,
+            HouseholdId = id,
+            Name = $"{user.GivenName}'s house",
+            Users = new List<User>() { user }
+        };
+
+        AmazonCognitoIdentityProviderClient cognitoClient = new();
+        AdminUpdateUserAttributesRequest request = new()
+        {
+            UserPoolId = "eu-west-2_xRpVWcjO2",
+            Username = user.Username,
+            UserAttributes = new List<AttributeType>() { new AttributeType() { Name = "custom:householdId", Value = household.Id } }
+        };
+
+        AdminUpdateUserAttributesResponse response = new();
+        try
+        {
+            response = await cognitoClient.AdminUpdateUserAttributesAsync(request);
+        }
+        catch(Exception ex)
+        {
+            LambdaLogger.Log("ADDHOUSEHOLD EXCEPTION: " + ex.Message);
+            return string.Empty;
+        }
+
+        IDynamoService houseService = new DynamoService<Household>(Household.Identifier);
+        await houseService.Put(household.Id, JsonConvert.SerializeObject(household).ToString());
+
+        if (response.HttpStatusCode == HttpStatusCode.OK)
+        {
+            return household.Id;
+        }
+        else
+        {
+            return string.Empty;
+        }
     }
 }
 

@@ -23,6 +23,9 @@ namespace foodTrackerApi.Models
         [DynamoDBProperty("quantity")]
         public int Quantity { get; set; }
 
+        [DynamoDBProperty("storageid")]
+        public string StorageId { get; set; }
+
         public static string Identifier => "food-item";
     }
 }

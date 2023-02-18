@@ -7,11 +7,14 @@ using System.Threading.Tasks;
 
 namespace foodTrackerApi.Models
 {
-    public class FoodStorage : DynamoBaseModel
+    public class Household : DynamoBaseModel
     {
         [DynamoDBProperty("name")]
         public string Name { get; set; }
 
-        public static string Identifier => "storage";
+        [DynamoDBProperty("users")]
+        public List<User> Users { get; set; }
+
+        public static string Identifier => "household";
     }
 }

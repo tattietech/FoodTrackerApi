@@ -12,8 +12,8 @@ namespace foodTrackerApi.Models
     [DynamoDBTable("food-tracker-db")]
     public class DynamoBaseModel
     {
-        [DynamoDBHashKey("household")]
-        public int Household { get; set; }
+        [DynamoDBHashKey("householdId")]
+        public string HouseholdId { get; set; }
 
         [DynamoDBProperty("id")]
         public string Id { get; set; }

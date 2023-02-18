@@ -10,10 +10,12 @@ namespace foodTrackerApi.Interfaces
 {
     public interface IDynamoService
     {
-        Task<DynamoServiceResponse> List(int household);
+        Task<DynamoServiceResponse> List(string household, string? storageId = null);
 
-        Task<DynamoServiceResponse> Put(string item);
+        Task<DynamoServiceResponse> Put(string household, string item);
 
-        Task<DynamoServiceResponse> Delete(int household, string id);
+        Task<DynamoServiceResponse> Delete(string household, string id);
+
+        Task<DynamoServiceResponse> DeleteStorage(string household, string storageId);
     }
 }
