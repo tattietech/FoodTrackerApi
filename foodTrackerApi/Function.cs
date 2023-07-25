@@ -41,6 +41,8 @@ public class Function
             "food" => new DynamoService<FoodItem>(FoodItem.Identifier),
             "storage" => new DynamoService<FoodStorage>(FoodStorage.Identifier),
             "household" => new DynamoService<Household>(Household.Identifier),
+            "invite" => new DynamoService<HouseholdInvite>(HouseholdInvite.Identifier),
+            "user" => new DynamoService<User>(User.Identifier),
             _ => null,
         };
 
@@ -64,7 +66,7 @@ public class Function
                 if (string.IsNullOrEmpty(user.HouseholdId))
                     break;
 
-                if(path == "food")
+                if (path == "food")
                 {
                     bool gotStorage = request.QueryStringParameters.TryGetValue("storageId", out var storageId);
                     if (!gotStorage)
@@ -72,6 +74,19 @@ public class Function
 
                     serviceResponse = await _dynamoService.List(user.HouseholdId, storageId);
                     break;
+                }
+                else if (path == "invite")
+                {
+                    serviceResponse = await _dynamoService.GetInvites(user.Email);
+                    break;
+                }
+                else if (path == "user")
+                {
+                    return new APIGatewayHttpApiV2ProxyResponse
+                    {
+                        StatusCode = 200,
+                        Body = JsonConvert.SerializeObject(user)
+                    };
                 }
 
                 serviceResponse = await _dynamoService.List(user.HouseholdId);
@@ -81,6 +96,60 @@ public class Function
 
                 if (string.IsNullOrEmpty(user.HouseholdId))
                     break;
+
+                if(path == "invite")
+                {
+                    if (request.QueryStringParameters != null && request.QueryStringParameters.TryGetValue("inviteId", out var inviteId))
+                    {
+                        request.QueryStringParameters.TryGetValue("accept", out var accept);
+                        var inviteResponse = await _dynamoService.GetInvites(user.Email);
+                        var invite = new HouseholdInvite();
+
+                        if (inviteResponse.Success)
+                        {
+                            invite = JsonConvert.DeserializeObject<List<HouseholdInvite>>(inviteResponse.Message)?.Where(i => i.Id == inviteId)?.First();
+                        }
+                        else
+                        {
+                            serviceResponse = inviteResponse;
+                            break;
+                        }
+
+                        LambdaLogger.Log("ACCEPT INVITE VALUE: " + accept);
+
+                        if (accept == "true")
+                        {
+                            LambdaLogger.Log("INVITE VALUE ID: " + invite.Id);
+                            invite.Accepted = true;
+                            await UpdateUserHousehold(user, invite.HouseholdId);
+                            request.Body = JsonConvert.SerializeObject(invite);
+                        }
+                        else
+                        {
+                            serviceResponse = await _dynamoService.Delete(invite.HouseholdId, invite.Id);
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        var invite = JsonConvert.DeserializeObject<HouseholdInvite>(request.Body);
+                        // add user details to new invite
+                        invite.From.GivenName = user.GivenName;
+                        invite.From.FamilyName = user.FamilyName;
+                        invite.From.Email = user.Email;
+                        request.Body = JsonConvert.SerializeObject(invite);
+                    }
+                }
+                else if (path == "household" && request.QueryStringParameters.TryGetValue("switch", out var switchHousehold))
+                {
+                    var householdResponse = await _dynamoService.List(user.HouseholdId);
+                    var currentHouseholdId = JsonConvert.DeserializeObject<List<Household>>(householdResponse.Message)?.First();
+                    var altHouseholdId = currentHouseholdId?.Users.Where(u => u.Email == user.Email).First().HouseholdId;
+
+                    serviceResponse.Message = await this.UpdateUserHousehold(user, altHouseholdId);
+                    serviceResponse.Success = true;
+                    break;
+                }
 
                 serviceResponse = await _dynamoService.Put(user.HouseholdId, request.Body);
                 break;
@@ -123,25 +192,47 @@ public class Function
 
         if (string.IsNullOrEmpty(user.HouseholdId))
         {
-            var household = await AddHousehold(user);
+            var household = await UpdateUserHousehold(user);
             user.HouseholdId = household;
         }
 
         return user;
     }
 
-    private async Task<string> AddHousehold(User user)
+    private async Task<string> UpdateUserHousehold(User user, string? id = null)
     {
-        var id = $"household-{Guid.NewGuid()}";
+        var household = new Household();
+        IDynamoService houseService = new DynamoService<Household>(Household.Identifier);
 
-        user.IsHouseholdAdmin= true;
-        var household = new Household
+        if (id is null)
         {
-            Id = id,
-            HouseholdId = id,
-            Name = $"{user.GivenName}'s house",
-            Users = new List<User>() { user }
-        };
+            id = $"household-{Guid.NewGuid()}";
+            user.IsHouseholdAdmin = true;
+
+            household = new Household
+            {
+                Id = id,
+                HouseholdId = id,
+                Name = $"{user.GivenName}'s house",
+                Users = new List<User>() { user }
+            };
+        }
+        else
+        {
+            user.IsHouseholdAdmin = false;
+            var householdResponse = await houseService.List(id);
+            household = JsonConvert.DeserializeObject<List<Household>>(householdResponse.Message)?.First();
+
+            if (household.Users.Any(u => u.Email == user.Email))
+            {
+                household.Users.Where(u => u.Email == user.Email).First().HouseholdId = user.HouseholdId;
+            }
+            else
+            {
+                household?.Users.Add(user);
+            }
+        }
+        
 
         AmazonCognitoIdentityProviderClient cognitoClient = new();
         AdminUpdateUserAttributesRequest request = new()
@@ -162,7 +253,7 @@ public class Function
             return string.Empty;
         }
 
-        IDynamoService houseService = new DynamoService<Household>(Household.Identifier);
+        
         await houseService.Put(household.Id, JsonConvert.SerializeObject(household).ToString());
 
         if (response.HttpStatusCode == HttpStatusCode.OK)

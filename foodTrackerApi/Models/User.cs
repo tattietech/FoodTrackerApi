@@ -26,5 +26,7 @@ namespace foodTrackerApi.Models
         public string Username { get; set; }
 
         public bool IsHouseholdAdmin { get; set; }
+
+        public static string Identifier => "user";
     }
 }

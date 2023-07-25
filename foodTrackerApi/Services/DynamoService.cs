@@ -5,6 +5,7 @@ using Amazon.DynamoDBv2.Model;
 using foodTrackerApi.Interfaces;
 using foodTrackerApi.Models;
 using Newtonsoft.Json;
+using System.Net;
 
 namespace foodTrackerApi.Services
 {
@@ -84,7 +85,7 @@ namespace foodTrackerApi.Services
 
                 if(string.IsNullOrEmpty((itemObject as DynamoBaseModel).Id))
                 {
-                    (itemObject as DynamoBaseModel).Id = $"{identifier}-{household}-{Guid.NewGuid()}";
+                    (itemObject as DynamoBaseModel).Id = $"{identifier}-{Guid.NewGuid()}";
                 }
 
                 var doc = context.ToDocument<T>(itemObject);
@@ -138,6 +139,35 @@ namespace foodTrackerApi.Services
             {
                 return DynamoServiceResponse.ReturnFailure(ex.Message);
             }
+        }
+
+        public async Task<DynamoServiceResponse> GetInvites(string email)
+        {
+            QueryRequest queryRequest = new QueryRequest
+            {
+                TableName = tableName,
+                IndexName = "household-invite-index",
+                KeyConditionExpression = "email = :email",
+                ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+                    {
+                        {":email", new AttributeValue { S =  email}},
+                    },
+                ScanIndexForward = true
+            };
+
+            var dbResponse = await client.QueryAsync(queryRequest);
+
+            List<T> items = new();
+
+            foreach (var item in dbResponse.Items)
+            {
+                var doc = Document.FromAttributeMap(item);
+                var mappedItem = context.FromDocument<T>(doc);
+
+                items.Add(mappedItem);
+            }
+
+            return DynamoServiceResponse.ReturnSuccess(JsonConvert.SerializeObject(items));
         }
     }
 }

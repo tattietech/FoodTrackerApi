@@ -17,5 +17,7 @@ namespace foodTrackerApi.Interfaces
         Task<DynamoServiceResponse> Delete(string household, string id);
 
         Task<DynamoServiceResponse> DeleteStorage(string household, string storageId);
+
+        Task<DynamoServiceResponse> GetInvites(string email);
     }
 }
