@@ -113,6 +113,7 @@ namespace foodTrackerApi.Services
             }
         }
 
+        // this method is used to delete all food items in storage before deleting the storage itself
         public async Task<DynamoServiceResponse> DeleteStorage(string household, string storageId)
         {
             try

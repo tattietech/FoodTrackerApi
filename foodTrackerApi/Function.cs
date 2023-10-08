@@ -36,6 +36,7 @@ public class Function
         var path = request.RequestContext?.Http?.Path?.Split("/")?.LastOrDefault(string.Empty);
         var method = request.RequestContext?.Http?.Method;
 
+        // create service specific to request for generic methods
         _dynamoService = path switch
         {
             "food" => new DynamoService<FoodItem>(FoodItem.Identifier),
@@ -46,6 +47,7 @@ public class Function
             _ => null,
         };
 
+        // default response which is returned if user is not authenticated or request invalid
         APIGatewayHttpApiV2ProxyResponse response = new()
         {
             Headers = new Dictionary<string, string>() { { "Content-Type", "application/json" }},
@@ -66,6 +68,7 @@ public class Function
                 if (string.IsNullOrEmpty(user.HouseholdId))
                     break;
 
+                // get food items from storage id
                 if (path == "food")
                 {
                     bool gotStorage = request.QueryStringParameters.TryGetValue("storageId", out var storageId);
@@ -75,11 +78,15 @@ public class Function
                     serviceResponse = await _dynamoService.List(user.HouseholdId, storageId);
                     break;
                 }
+
+                // get invites from user email
                 else if (path == "invite")
                 {
                     serviceResponse = await _dynamoService.GetInvites(user.Email);
                     break;
                 }
+
+                // get user info
                 else if (path == "user")
                 {
                     return new APIGatewayHttpApiV2ProxyResponse
@@ -89,6 +96,7 @@ public class Function
                     };
                 }
 
+                // get storage for household
                 serviceResponse = await _dynamoService.List(user.HouseholdId);
                 break;
             case "PUT":
@@ -99,6 +107,7 @@ public class Function
 
                 if(path == "invite")
                 {
+                    // accept or decline household invite
                     if (request.QueryStringParameters != null && request.QueryStringParameters.TryGetValue("inviteId", out var inviteId))
                     {
                         request.QueryStringParameters.TryGetValue("accept", out var accept);
@@ -130,6 +139,8 @@ public class Function
                             break;
                         }
                     }
+
+                    // send household invite
                     else
                     {
                         var invite = JsonConvert.DeserializeObject<HouseholdInvite>(request.Body);
@@ -140,6 +151,8 @@ public class Function
                         request.Body = JsonConvert.SerializeObject(invite);
                     }
                 }
+
+                // switch user household
                 else if (path == "household" && request.QueryStringParameters.TryGetValue("switch", out var switchHousehold))
                 {
                     var householdResponse = await _dynamoService.List(user.HouseholdId);
@@ -151,6 +164,7 @@ public class Function
                     break;
                 }
 
+                // create food or storage
                 serviceResponse = await _dynamoService.Put(user.HouseholdId, request.Body);
                 break;
             case "DELETE":
@@ -161,12 +175,14 @@ public class Function
                     if (string.IsNullOrEmpty(user.HouseholdId))
                         break;
 
+                    // delete storage and all contained items
                     if(path == "storage")
                     {
                         serviceResponse = await _dynamoService.DeleteStorage(user.HouseholdId, id);
                         break;
                     }
 
+                    // delete food
                     serviceResponse = await _dynamoService.Delete(user.HouseholdId, id);
                 }
                 break;
