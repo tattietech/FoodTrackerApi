@@ -1,49 +1,33 @@
-# AWS Lambda Empty Function Project
+# Food Tracker API Lambda Function
 
-This starter project consists of:
-* Function.cs - class file containing a class with a single function handler method
-* aws-lambda-tools-defaults.json - default argument settings for use with Visual Studio and command line deployment tools for AWS
+This Lambda function serves as the backend API for the Food Tracker application, handling CRUD operations for food items, storage locations, households, and user management.
 
-You may also have a test project depending on the options selected.
+## Project Status
 
-The generated function handler is a simple method accepting a string argument that returns the uppercase equivalent of the input string. Replace the body of this method, and parameters, to suit your needs. 
+**This is an experimental project created during AWS Developer Exam studies and is not maintained or live.**
 
-## Here are some steps to follow from Visual Studio:
+## Components
 
-To deploy your function to AWS Lambda, right click the project in Solution Explorer and select *Publish to AWS Lambda*.
+* **Function.cs** - Main Lambda function handler that processes API Gateway HTTP requests
+* **Models/** - Data models for food items, storage, households, and users
+* **Services/** - DynamoDB service layer for data operations
+* **Interfaces/** - Service and model interfaces
+* **aws-lambda-tools-defaults.json** - AWS Lambda deployment configuration
 
-To view your deployed function open its Function View window by double-clicking the function name shown beneath the AWS Lambda node in the AWS Explorer tree.
+## Architecture
 
-To perform testing against your deployed function use the Test Invoke tab in the opened Function View window.
+The function integrates with:
+- **API Gateway** - HTTP API endpoints
+- **DynamoDB** - NoSQL database for storing all application data
+- **Cognito** - User authentication and authorization
 
-To configure event sources for your deployed function, for example to have your function invoked when an object is created in an Amazon S3 bucket, use the Event Sources tab in the opened Function View window.
+## API Endpoints
 
-To update the runtime configuration of your deployed function use the Configuration tab in the opened Function View window.
+The Lambda function handles the following resource paths:
+- `/food` - Food item management
+- `/storage` - Storage location management
+- `/household` - Household management
+- `/invite` - Household invitation system
+- `/user` - User information
 
-To view execution logs of invocations of your function use the Logs tab in the opened Function View window.
-
-## Here are some steps to follow to get started from the command line:
-
-Once you have edited your template and code you can deploy your application using the [Amazon.Lambda.Tools Global Tool](https://github.com/aws/aws-extensions-for-dotnet-cli#aws-lambda-amazonlambdatools) from the command line.
-
-Install Amazon.Lambda.Tools Global Tools if not already installed.
-```
-    dotnet tool install -g Amazon.Lambda.Tools
-```
-
-If already installed check if new version is available.
-```
-    dotnet tool update -g Amazon.Lambda.Tools
-```
-
-Execute unit tests
-```
-    cd "food-tracker/test/food-tracker.Tests"
-    dotnet test
-```
-
-Deploy function to AWS Lambda
-```
-    cd "food-tracker/src/food-tracker"
-    dotnet lambda deploy-function
-```
+All requests require authentication via the `authorization` header.
